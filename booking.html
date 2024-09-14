@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Restaurant Reservation / 餐厅预约</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: auto;
+            font-size: 18px; /* 增大字体大小 */
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+        }
+        .form-group input, .form-group select, .form-group button {
+            width: 100%;
+            padding: 12px;
+            box-sizing: border-box;
+            font-size: 16px; /* 增大输入框字体大小 */
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 18px; /* 增大按钮字体 */
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .reset-btn {
+            background-color: #dc3545; /* 红色背景 */
+        }
+        .timeline {
+            margin-top: 30px;
+            position: relative;
+        }
+        .timeline-entry {
+            border-bottom: 1px solid #ddd;
+            padding: 15px 0;
+        }
+        .cancel-btn, .edit-btn, .checkin-btn {
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            cursor: pointer;
+            margin-right: 5px;
+        }
+        .cancel-btn {
+            background-color: #dc3545;
+        }
+        .edit-btn {
+            background-color: #ffc107;
+        }
+        .checkin-btn {
+            background-color: #28a745;
+        }
+        .checked-in {
+            background-color: #e9ecef;
+            color: #6c757d;
+        }
+        .statistics {
+            margin-top: 30px;
+        }
+        .download-btn {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            cursor: pointer;
+        }
+        #calendar {
+            margin-top: 30px;
+            padding: 10px;
+        }
+        #calendar input {
+            padding: 5px;
+            font-size: 16px;
+        }
+        .divider {
+            border-top: 2px solid #333;
+            margin: 20px 0;
+        }
+        .sort-btn {
+            background-color: #000;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .sort-btn:hover {
+            background-color: #444;
+        }
+    </style>
+</head>
+<body>
+    <h1>Restaurant Reservation / 餐厅预约</h1>
+    <form id="reservationForm">
+        <div class="form-group">
+            <label for="date">Select Date / 选择日期</label>
+            <input type="date" id="date" name="date" required>
+        </div>
+        <div class="form-group">
+            <label for="time">Select Time / 选择时间</label>
+            <div>
+                <select id="period" name="period" required>
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                </select>
+                <input type="number" id="hour" name="hour" placeholder="Hour" min="1" max="12" required style="width: 70px; display: inline-block;">
+                <input type="number" id="minute" name="minute" placeholder="Minute" min="0" max="59" required style="width: 70px; display: inline-block;">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="numberOfPeople">Number of People / 人数</label>
+            <input type="number" id="numberOfPeople" name="numberOfPeople" min="1" max="20" required>
+        </div>
+        <div class="form-group">
+            <label for="contactName">Contact Name / 联系姓名</label>
+            <input type="text" id="contactName" name="contactName" required>
+        </div>
+        <div class="form-group">
+            <label for="contactPhone">Contact Phone / 联系电话</label>
+            <input type="tel" id="contactPhone" name="contactPhone" required>
+        </div>
+        <button type="button" onclick="submitReservation()">Submit Reservation / 提交预约</button>
+        <button type="button" class="reset-btn" onclick="resetReservations()">Reset / 重置</button>
+    </form>
+
+    <div class="divider"></div>
+
+    <div id="calendar">
+        <label for="calendarDate">Select Date to View Reservations / 选择日期查看预约：</label>
+        <input type="date" id="calendarDate" name="calendarDate" onchange="viewReservationsByDate()">
+    </div>
+
+    <button class="sort-btn" onclick="sortReservations()">Sort / 排序</button>
+
+    <div class="timeline" id="timeline"></div>
+
+    <div class="statistics">
+        <button class="download-btn" onclick="downloadStatistics()">Download Statistics / 下载统计表格</button>
+        <button class="download-btn" onclick="downloadLog()">Download Operation Log / 下载操作日志</button>
+    </div>
+
+    <script>
+        let reservations = [];
+        const originalReservations = [];
+
+        function formatTime(period, hour, minute) {
+            const strHour = hour < 10 ? '0' + hour : hour;
+            const strMinute = minute < 10 ? '0' + minute : minute;
+            return `${period === 'PM' ? '下午 ' : '上午 '}${strHour}时${strMinute}分`;
+        }
+
+        function get24HourTime(period, hour, minute) {
+            if (period === 'PM' && hour !== 12) hour += 12;
+            if (period === 'AM' && hour === 12) hour = 0;
+            return hour * 100 + minute; // Returns time in 24-hour format as HHMM
+        }
+
+        function updateTimeline() {
+            const timeline = document.getElementById('timeline');
+            timeline.innerHTML = ''; // Clear current timeline
+
+            reservations.forEach((res, index) => {
+                const entry = document.createElement('div');
+                entry.className = `timeline-entry ${res.checkedIn ? 'checked-in' : ''}`;
+                entry.innerHTML = `
+                    <strong>Reservation ${index + 1}</strong><br>
+                    Date: ${res.date}<br>
+                    Time: ${formatTime(res.period, res.hour, res.minute)}<br>
+                    Number of People: ${res.numberOfPeople}<br>
+                    Contact Name: ${res.contactName}<br>
+                    Contact Phone: ${res.contactPhone}<br>
+                    <button class="edit-btn" onclick="editReservation(${index})">Edit / 编辑</button>
+                    <button class="cancel-btn" onclick="cancelReservation(${index})">Cancel / 取消</button>
+                    ${!res.checkedIn ? `<button class="checkin-btn" onclick="checkIn(${index})">Check In / 已签到</button>` : ''}
+                `;
+                timeline.appendChild(entry);
+            });
+
+            saveReservations();
+        }
+
+        function submitReservation() {
+            const date = document.getElementById('date').value;
+            const period = document.getElementById('period').value;
+            const hour = parseInt(document.getElementById('hour').value, 10);
+            const minute = parseInt(document.getElementById('minute').value, 10);
+
+            if (!date || isNaN(hour) || isNaN(minute)) {
+                alert("All time fields must be filled out. / 所有时间字段必须填写。");
+                return;
+            }
+
+            const time = formatTime(period, hour, minute);
+            const numberOfPeople = document.getElementById('numberOfPeople').value;
+            const contactName = document.getElementById('contactName').value;
+            const contactPhone = document.getElementById('contactPhone').value;
+
+            // Check for existing reservation at the same time and date
+            if (reservations.some(res => res.date === date && res.period === period && res.hour === hour && res.minute === minute)) {
+                alert("This time slot is already reserved. Please choose another time slot. / 该时间段已被预约。请另选时间段。");
+                return;
+            }
+
+            reservations.push({
+                date,
+                period,
+                hour,
+                minute,
+                numberOfPeople,
+                contactName,
+                contactPhone,
+                checkedIn: false,
+                status: 'Pending'
+            });
+
+            originalReservations.push({
+                date,
+                period,
+                hour,
+                minute,
+                numberOfPeople,
+                contactName,
+                contactPhone,
+                checkedIn: false,
+                status: 'Pending'
+            });
+
+            // Clear the form after submission
+            document.getElementById('reservationForm').reset();
+
+            updateTimeline();
+        }
+
+        function resetReservations() {
+            reservations = [];
+            updateTimeline();
+        }
+
+        function editReservation(index) {
+            const reservation = reservations[index];
+            document.getElementById('date').value = reservation.date;
+            document.getElementById('period').value = reservation.period;
+            document.getElementById('hour').value = reservation.hour;
+            document.getElementById('minute').value = reservation.minute;
+            document.getElementById('numberOfPeople').value = reservation.numberOfPeople;
+            document.getElementById('contactName').value = reservation.contactName;
+            document.getElementById('contactPhone').value = reservation.contactPhone;
+
+            // Remove the current reservation so it can be re-added after editing
+            reservations.splice(index, 1);
+            updateTimeline();
+        }
+
+        function cancelReservation(index) {
+            reservations[index].status = 'Cancelled';
+            updateTimeline();
+        }
+
+        function checkIn(index) {
+            reservations[index].checkedIn = true;
+            updateTimeline();
+        }
+
+        function saveReservations() {
+            localStorage.setItem('reservations', JSON.stringify(reservations));
+        }
+
+        function loadReservations() {
+            const saved = localStorage.getItem('reservations');
+            if (saved) {
+                reservations = JSON.parse(saved);
+                updateTimeline();
+            }
+        }
+
+        function viewReservationsByDate() {
+            const selectedDate = document.getElementById('calendarDate').value;
+            if (!selectedDate) {
+                alert("Please select a date first. / 请先选择日期。");
+                return;
+            }
+            reservations = originalReservations.filter(res => res.date === selectedDate && res.status !== 'Cancelled');
+            updateTimeline();
+        }
+
+        function sortReservations() {
+            const selectedDate = document.getElementById('calendarDate').value;
+            if (!selectedDate) {
+                alert("Please select a date first. / 请先选择日期。");
+                return;
+            }
+
+            // Sort based on time in 24-hour format
+            reservations.sort((a, b) => {
+                const timeA = get24HourTime(a.period, a.hour, a.minute);
+                const timeB = get24HourTime(b.period, b.hour, b.minute);
+                return timeA - timeB;
+            });
+            updateTimeline();
+        }
+
+        function downloadStatistics() {
+            alert("Statistics downloading... / 正在下载统计数据...");
+        }
+
+        function downloadLog() {
+            alert("Log downloading... / 正在下载日志...");
+        }
+
+        window.onload = loadReservations;
+    </script>
+</body>
+</html>
